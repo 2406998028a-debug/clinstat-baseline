@@ -58,7 +58,7 @@
     const layered=annotate&&pairs.length>1;
     const width=Math.max(980,times.length*Math.max(150,groups.length*32)+200);
     const margin=170,plotRight=width-30,plotWidth=plotRight-margin,step=plotWidth/times.length;
-    const title=options.title||outcome.label,axis=options.yLabel||outcome.label;
+    const title=options.title||outcome.label,axis=options.yLabel||outcome.label,xAxis=String(options.xLabel??'时间点');
     const titleLines=lines(title,width-100,22),legendCols=groups.length;
     const titleBottom=35+titleLines.length*27,legendTop=titleBottom+12,legendRows=Math.ceil(groups.length/legendCols);
     const annotationTop=legendTop+legendRows*40+12;
@@ -69,7 +69,8 @@
     const annotationHeight=layered?annotationRows.reduce((a,b)=>a+b,0)+14:0;
     const plotTop=legendTop+legendRows*40+20+annotationHeight,plotBottom=plotTop+390;
     const maxTimeLines=Math.max(...times.map(t=>lines(t,step-8,14).length));
-    const tableTop=plotBottom+45+maxTimeLines*17+18,tableRowHeight=34;
+    const xAxisLines=lines(xAxis,plotWidth,14);
+    const tableTop=plotBottom+45+maxTimeLines*17+18+(xAxisLines.length-1)*17,tableRowHeight=34;
     const tableBottom=tableTop+(showTable?(groups.length+1)*tableRowHeight:0);
     const family=pLabels[pField];if(!family)throw Error('P值标注方式无效');
     const model=outcome.model==='lmm'?'LMM':'GEE';
@@ -88,7 +89,7 @@
     const text=(value,xx,yy,size=14,anchor='start',extra='')=>`<text x="${xx}" y="${yy}" text-anchor="${anchor}" font-size="${size}" fill="#23322e" stroke="none" ${extra}>${esc(value)}</text>`;
     const line=(x1,y1,x2,y2,color='#273a33',sw=1.2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${sw}"/>`;
     let result=`<svg id="rm-chart" class="rm-chart rm-boxplot" xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title+' 重复测量分组箱线图')}" style="font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:none;stroke:none"><title>${esc(title+' 重复测量分组箱线图')}</title><desc>${esc(caption.join(' '))}</desc><rect width="${width}" height="${height}" fill="white"/>`;
-    result+=`<metadata>${esc(JSON.stringify({chart:'grouped_boxplot',quantiles:'R type 7',whiskers:'1.5 IQR',outcome:outcome.label,model,showP,showMD,comparisonMode,pairs,left,right,pField,showTable,showOutliers}))}</metadata>`;
+    result+=`<metadata>${esc(JSON.stringify({chart:'grouped_boxplot',quantiles:'R type 7',whiskers:'1.5 IQR',outcome:outcome.label,model,showP,showMD,comparisonMode,pairs,left,right,pField,showTable,showOutliers,title,xLabel:xAxis,yLabel:axis}))}</metadata>`;
     titleLines.forEach((t,i)=>{result+=text(t,width/2,35+i*27,22,'middle','font-weight="600"');});
     groups.forEach((g,i)=>{const xx=50+(i%legendCols)*(width-100)/legendCols,yy=legendTop+Math.floor(i/legendCols)*40;
       result+=`<rect x="${xx}" y="${yy-11}" width="17" height="12" fill="white" stroke="${palette[i%palette.length]}" stroke-width="2"/>`;
@@ -120,7 +121,7 @@
         result+='</g>';rowTop+=annotationRows[i];
       });
     });
-    result+=text('时间点',margin+plotWidth/2,tableTop-17,14,'middle');
+    xAxisLines.forEach((label,i)=>{result+=text(label,margin+plotWidth/2,tableTop-17-(xAxisLines.length-1-i)*17,14,'middle');});
     if(showTable){
       const tableX=30,labelWidth=margin-tableX,cellWidth=step;
       const tableCell=(value,col,row,fill,anchor='middle')=>{const xx=tableX+(col===0?0:labelWidth+(col-1)*cellWidth),w=col===0?labelWidth:cellWidth,yy=tableTop+row*tableRowHeight;
