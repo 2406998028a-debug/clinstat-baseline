@@ -26,6 +26,20 @@
     const sign=String(row.group_left)===left?1:-1;
     return {estimate:finite(row.effect_estimate)?sign*row.effect_estimate:null,p:finite(row[pField])?row[pField]:null};
   }
+  function comparisonPairs(groups,options={}){
+    const gs=groups.map(String),mode=options.comparisonMode||'single';
+    if(mode==='all')return gs.flatMap((left,i)=>gs.slice(i+1).map(right=>[left,right]));
+    if(mode!=='single')throw Error('比较范围无效');
+    const left=String(options.left??gs[0]),right=String(options.right??gs[1]);
+    if(left===right||!gs.includes(left)||!gs.includes(right))throw Error('请选择不同的两组进行标注');
+    return [[left,right]];
+  }
+  function annotationLabels(c,left,right,showP,showMD,includePair){
+    const labels=[];let prefix=includePair?`${left} − ${right}: `:'';
+    if(showMD){labels.push(prefix+'MD='+num(c.estimate));prefix='';}
+    if(showP)labels.push(prefix+(finite(c.p)?'P'+pvalue(c.p):'P：未估计'));
+    return labels;
+  }
   // Character-width wrapping keeps long Chinese and English labels inside SVG exports.
   function lines(text,maxWidth,fontSize){
     const result=[];let line='',width=0;
@@ -39,13 +53,21 @@
     const showP=Boolean(options.showP),showMD=Boolean(options.showMD),annotate=showP||showMD;
     const showTable=options.showTable!==false,showOutliers=options.showOutliers!==false;
     const left=String(options.left??groups[0]),right=String(options.right??groups[1]),pField=options.pField||'p_holm_within_outcome';
-    if(annotate&&(left===right||!groups.map(String).includes(left)||!groups.map(String).includes(right)))throw Error('请选择不同的两组进行标注');
+    const comparisonMode=options.comparisonMode||'single';
+    const pairs=annotate?comparisonPairs(groups,options):[];
+    const layered=annotate&&pairs.length>1;
     const width=Math.max(980,times.length*Math.max(150,groups.length*32)+200);
     const margin=170,plotRight=width-30,plotWidth=plotRight-margin,step=plotWidth/times.length;
     const title=options.title||outcome.label,axis=options.yLabel||outcome.label;
     const titleLines=lines(title,width-100,22),legendCols=Math.max(1,Math.floor((width-100)/225));
     const titleBottom=35+titleLines.length*27,legendTop=titleBottom+12,legendRows=Math.ceil(groups.length/legendCols);
-    const plotTop=legendTop+legendRows*40+20,plotBottom=plotTop+390;
+    const annotationTop=legendTop+legendRows*40+12;
+    const annotationRows=pairs.map(([l,r])=>Math.max(...times.map(t=>{
+      const c=comparison(pairwise,outcome.label,t,l,r,pField);
+      return annotationLabels(c,l,r,showP,showMD,true).flatMap(label=>lines(label,step-16,13)).length;
+    }))*17+16);
+    const annotationHeight=layered?annotationRows.reduce((a,b)=>a+b,0)+14:0;
+    const plotTop=legendTop+legendRows*40+20+annotationHeight,plotBottom=plotTop+390;
     const maxTimeLines=Math.max(...times.map(t=>lines(t,step-8,14).length));
     const tableTop=plotBottom+45+maxTimeLines*17+18,tableRowHeight=34;
     const tableBottom=tableTop+(showTable?(groups.length+1)*tableRowHeight:0);
@@ -53,12 +75,12 @@
     const model=outcome.model==='lmm'?'LMM':'GEE';
     const caption=[`箱：Q1–Q3；中线：中位数；须：1.5×IQR内最远观测。${showOutliers?'圆点：离群值（保留在分析中）。':'离群值未画出，仍保留在分析中。'}`,
       '四分位数采用线性插值（R quantile type 7）；横轴为分类时间，等间距不代表实际时间间隔。',
-      ...(annotate?[`标注来源：${model}各时点组间比较；方向：${left} − ${right}。${showMD?'MD为模型均值差，不是中位数差。':''}`]:[]),
-      ...(showP?[`图中P：${family}。校正范围包含已计划的全部相关比较，不因当前只画一个组对而缩小。`]:[])];
+      ...(annotate?[`标注来源：${model}各时点组间比较；${comparisonMode==='all'?`每时点全部${pairs.length}对，方向为图例顺序中前组减后组。`:`方向：${left} − ${right}。`}${showMD?'MD为模型均值差，不是中位数差。':''}`]:[]),
+      ...(showP?[`图中P：${family}。沿用已计划的完整比较族，不因图中显示范围而重新校正。`]:[])];
     const captionLines=caption.flatMap(x=>lines(x,width-100,13)),height=tableBottom+35+captionLines.length*20+20;
     let min=Math.min(...stats.map(c=>c.min)),max=Math.max(...stats.map(c=>c.max)),span=max-min;
     if(span===0)span=Math.max(1,Math.abs(min)*.2);
-    const yMin=min-.08*span,yMax=max+(annotate?.29:.08)*span;
+    const yMin=min-.08*span,yMax=max+(annotate&&!layered?.29:.08)*span;
     const y=v=>plotBottom-(v-yMin)/(yMax-yMin)*(plotBottom-plotTop);
     const center=t=>margin+(times.indexOf(t)+.5)*step,clusterWidth=Math.min(step*.76,groups.length*32);
     const boxWidth=Math.min(27,clusterWidth/groups.length*.72);
@@ -66,7 +88,7 @@
     const text=(value,xx,yy,size=14,anchor='start',extra='')=>`<text x="${xx}" y="${yy}" text-anchor="${anchor}" font-size="${size}" fill="#23322e" stroke="none" ${extra}>${esc(value)}</text>`;
     const line=(x1,y1,x2,y2,color='#273a33',sw=1.2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${sw}"/>`;
     let result=`<svg id="rm-chart" class="rm-chart rm-boxplot" xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title+' 重复测量分组箱线图')}" style="font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:none;stroke:none"><title>${esc(title+' 重复测量分组箱线图')}</title><desc>${esc(caption.join(' '))}</desc><rect width="${width}" height="${height}" fill="white"/>`;
-    result+=`<metadata>${esc(JSON.stringify({chart:'grouped_boxplot',quantiles:'R type 7',whiskers:'1.5 IQR',outcome:outcome.label,model,showP,showMD,left,right,pField,showTable,showOutliers}))}</metadata>`;
+    result+=`<metadata>${esc(JSON.stringify({chart:'grouped_boxplot',quantiles:'R type 7',whiskers:'1.5 IQR',outcome:outcome.label,model,showP,showMD,comparisonMode,pairs,left,right,pField,showTable,showOutliers}))}</metadata>`;
     titleLines.forEach((t,i)=>{result+=text(t,width/2,35+i*27,22,'middle','font-weight="600"');});
     groups.forEach((g,i)=>{const xx=50+(i%legendCols)*(width-100)/legendCols,yy=legendTop+Math.floor(i/legendCols)*40;
       result+=`<rect x="${xx}" y="${yy-11}" width="17" height="12" fill="white" stroke="${palette[i%palette.length]}" stroke-width="2"/>`;
@@ -87,13 +109,16 @@
     times.forEach(time=>{
       lines(time,step-8,14).forEach((t,i)=>{result+=text(t,center(time),plotBottom+25+i*17,14,'middle');});
       if(!annotate)return;
-      const c=comparison(pairwise,outcome.label,time,left,right,pField),localMax=Math.max(...stats.filter(s=>s.time===time).map(s=>s.max));
-      const yy=y(localMax)-15,x1=Math.min(x(time,left),x(time,right)),x2=Math.max(x(time,left),x(time,right));
-      result+=`<g data-comparison-time="${esc(time)}">`+line(x1,yy+5,x1,yy)+line(x1,yy,x2,yy)+line(x2,yy,x2,yy+5);
-      let row=yy-10;
-      if(showP){result+=text(finite(c.p)?'P'+pvalue(c.p):'P：未估计',center(time),row,13,'middle');row-=19;}
-      if(showMD)result+=text('MD='+num(c.estimate),center(time),row,13,'middle');
-      result+='</g>';
+      let rowTop=annotationTop;
+      pairs.forEach(([l,r],i)=>{
+        const c=comparison(pairwise,outcome.label,time,l,r,pField),localMax=Math.max(...stats.filter(s=>s.time===time).map(s=>s.max));
+        const yy=layered?rowTop+annotationRows[i]-8:y(localMax)-15;
+        const x1=Math.min(x(time,l),x(time,r)),x2=Math.max(x(time,l),x(time,r));
+        result+=`<g data-comparison-time="${esc(time)}" data-comparison-left="${esc(l)}" data-comparison-right="${esc(r)}">`+line(x1,yy+5,x1,yy)+line(x1,yy,x2,yy)+line(x2,yy,x2,yy+5);
+        const labels=annotationLabels(c,l,r,showP,showMD,layered).flatMap(label=>lines(label,step-16,13));
+        labels.forEach((label,j)=>{result+=text(label,center(time),layered?rowTop+13+j*17:yy-10-(labels.length-1-j)*19,13,'middle');});
+        result+='</g>';rowTop+=annotationRows[i];
+      });
     });
     result+=text('时间点',margin+plotWidth/2,tableTop-17,14,'middle');
     if(showTable){
@@ -107,6 +132,6 @@
     captionLines.forEach((t,i)=>{result+=text(t,50,tableBottom+35+i*20,13);});
     return result+'</svg>';
   }
-  const api={summarize,cells,comparison,svg,pLabels};
+  const api={summarize,cells,comparison,comparisonPairs,svg,pLabels};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RMBoxPlot=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

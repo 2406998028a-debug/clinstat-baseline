@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const VERSION='20261018-box1';
+  const VERSION='20261018-box2';
   const root=document.getElementById('rm-app');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number=(v,d=2)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(d);
@@ -123,7 +123,7 @@
   function methodView(o){const m=selectedResult().metadata;return `<div class="rm-method"><p>分析为探索性比较，未纳入额外协变量。研究设计、主要结局、量表方向、比较族和模型假设仍应与研究方案一致。</p>${m?`<p><strong>${esc(o.label)}</strong><br>类型：${types[o.type]}<br>模型：${esc(m.model)}；${esc(m.family)}；${esc(m.corstr)}<br>方差：${esc(m.standard_error)}<br>推断：${esc(m.inference||'渐近Wald推断')}<br>${m.interpretation?'解释层面：'+esc(m.interpretation)+'<br>':''}${m.OR_direction?'OR方向：'+esc(m.OR_direction)+'<br>':''}软件包版本：${esc(m.package_version)}</p>`:'<p>此结局模型失败，原因已保留。请核对数据、稀疏类别和模型假设。</p>'}<p>95%CI均为逐项未校正区间。组对比较分别从原始P进行结局内和全结局Holm校正，未重复校正。小样本修正、有序比例优势假设诊断、缺失数据模型及额外聚类层级不在本版自动处理范围内。</p><p>点击“下载分析记录”保存完整配置、诊断、精确P值、软件版本及失败原因。关闭或刷新页面会清空本次内存。</p></div>`;}
   function boxOptions(o){
     const groups=state.result.metadata.group_levels.map(String);
-    const opt=state.boxOptions[o.label]||(state.boxOptions[o.label]={showP:false,showMD:false,showTable:true,showOutliers:true,left:groups[0],right:groups[1],pField:'p_holm_within_outcome',title:o.label,yLabel:o.label});
+    const opt=state.boxOptions[o.label]||(state.boxOptions[o.label]={showP:false,showMD:false,comparisonMode:'single',showTable:true,showOutliers:true,left:groups[0],right:groups[1],pField:'p_holm_within_outcome',title:o.label,yLabel:o.label});
     if(!groups.includes(opt.left))opt.left=groups[0];
     if(!groups.includes(opt.right)||opt.right===opt.left)opt.right=groups.find(g=>g!==opt.left);
     return opt;
@@ -134,7 +134,7 @@
     const toggle=(prop,label)=>`<label class="rm-check"><input type="checkbox" data-box-prop="${prop}" ${opt[prop]?'checked':''}><span>${label}</span></label>`;
     const select=(prop,items)=>`<select data-box-prop="${prop}">${option(items,opt[prop])}</select>`;
     const graphic=RMBoxPlot.svg({data:state.dataset.data,groupColumn:state.snapshot.group,outcome:o,groups,pairwise:state.result.pairwise,options:opt});
-    return `<div class="rm-box-settings"><h3>重复测量箱线图</h3><p class="rm-help">每个时间点并排显示各组原始观测分布。箱体为Q1–Q3、中线为中位数；可独立选择是否标注P值、是否标注模型均值差MD。</p><div class="rm-box-switches">${toggle('showP','显示 P 值')}${toggle('showMD','显示均值差（MD）')}${toggle('showTable','显示下方中位数／四分位数表')}${toggle('showOutliers','显示离群值圆点')}</div><div class="rm-grid">${field('比较组（差值左项）',select('left',groups.map(g=>[g,g])))}${field('参照组（差值右项）',select('right',groups.filter(g=>g!==opt.left).map(g=>[g,g])))}${field('P值标注方式',select('pField',Object.entries(RMBoxPlot.pLabels).map(([v,label])=>[v,label])))}${field('纵轴名称（可含单位）',`<input data-box-prop="yLabel" maxlength="100" value="${esc(opt.yLabel)}">`)}${field('图标题',`<input data-box-prop="title" maxlength="100" value="${esc(opt.title)}">`)}</div><p class="rm-help">差值方向：${esc(opt.left)} − ${esc(opt.right)}。${groups.length>2?'多组数据保留全部箱体，仅标注上面选定的一对组。':''}图中P来自当前${o.model==='lmm'?'LMM':'GEE'}模型的时点内比较，沿用完整比较族的校正；不另外进行t检验或U检验。MD是均值差，不是箱体中位数之差。</p></div><section class="rm-chart-card"><div class="actions">${btn('下载 SVG 图','svg','secondary rm-small')}${btn('下载高清 PNG','png','secondary rm-small')}</div><div class="rm-chart-scroll">${graphic}</div></section>`;
+    return `<div class="rm-box-settings"><h3>重复测量箱线图</h3><p class="rm-help">每个时间点并排显示各组原始观测分布。箱体为Q1–Q3、中线为中位数；可独立选择是否标注P值、是否标注模型均值差MD。</p><div class="rm-box-switches">${toggle('showP','显示 P 值')}${toggle('showMD','显示均值差（MD）')}${toggle('showTable','显示下方中位数／四分位数表')}${toggle('showOutliers','显示离群值圆点')}</div><div class="rm-grid">${field('比较范围',select('comparisonMode',[['single','仅显示选定两组'],['all',`显示全部两两比较（${groups.length*(groups.length-1)/2}对／时点）`]]))}${opt.comparisonMode!=='all'?field('比较组（差值左项）',select('left',groups.map(g=>[g,g])))+field('参照组（差值右项）',select('right',groups.filter(g=>g!==opt.left).map(g=>[g,g]))):''}${field('P值标注方式',select('pField',Object.entries(RMBoxPlot.pLabels).map(([v,label])=>[v,label])))}${field('纵轴名称（可含单位）',`<input data-box-prop="yLabel" maxlength="100" value="${esc(opt.yLabel)}">`)}${field('图标题',`<input data-box-prop="title" maxlength="100" value="${esc(opt.title)}">`)}</div><p class="rm-help">${opt.comparisonMode==='all'?`每个时点显示全部${groups.length*(groups.length-1)/2}对，共${o.measurements.length*groups.length*(groups.length-1)/2}项组对时点比较；方向按图例顺序，前组减后组。标注分层排列，可分别开启P值与MD。`:`差值方向：${esc(opt.left)} − ${esc(opt.right)}。仅标注选定的一对组。`}图中P来自当前${o.model==='lmm'?'LMM':'GEE'}模型的时点内比较，沿用完整比较族的校正；不另外进行t检验或U检验。MD是均值差，不是箱体中位数之差。</p></div><section class="rm-chart-card"><div class="actions">${btn('下载 SVG 图','svg','secondary rm-small')}${btn('下载高清 PNG','png','secondary rm-small')}</div><div class="rm-chart-scroll">${graphic}</div></section>`;
   }
   function chartConfig(){return state.tab==='boxplot'&&selectedOutcome().type==='continuous'?{outcome:selectedOutcome().label,...boxOptions(selectedOutcome())}:null;}
   function chartName(extension){return 'ClinStat_repeated_'+(state.tab==='boxplot'?'boxplot':'trajectory')+'.'+extension;}
@@ -142,7 +142,7 @@
     const svg=document.getElementById('rm-chart');if(!svg)return;
     const url=URL.createObjectURL(new Blob([svg.outerHTML],{type:'image/svg+xml;charset=utf-8'}));
     try{const image=new Image();await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('图片生成失败，请下载SVG图'));image.src=url;});
-      const view=svg.viewBox.baseVal,canvas=document.createElement('canvas');canvas.width=Math.ceil(view.width*3);canvas.height=Math.ceil(view.height*3);
+      const view=svg.viewBox.baseVal,canvas=document.createElement('canvas');const scale=Math.min(3,8192/view.width,8192/view.height,Math.sqrt(16000000/(view.width*view.height)));canvas.width=Math.floor(view.width*scale);canvas.height=Math.floor(view.height*scale);
       const context=canvas.getContext('2d');if(!context)throw Error('浏览器无法生成PNG，请使用SVG');context.fillStyle='white';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('PNG生成失败，请使用SVG');saveBlob(blob,chartName('png'));
     }finally{URL.revokeObjectURL(url);}
