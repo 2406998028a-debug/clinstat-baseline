@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const VERSION='20261018-box2';
+  const VERSION='20261018-box3';
   const root=document.getElementById('rm-app');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number=(v,d=2)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(d);

@@ -59,7 +59,7 @@
     const width=Math.max(980,times.length*Math.max(150,groups.length*32)+200);
     const margin=170,plotRight=width-30,plotWidth=plotRight-margin,step=plotWidth/times.length;
     const title=options.title||outcome.label,axis=options.yLabel||outcome.label;
-    const titleLines=lines(title,width-100,22),legendCols=Math.max(1,Math.floor((width-100)/225));
+    const titleLines=lines(title,width-100,22),legendCols=groups.length;
     const titleBottom=35+titleLines.length*27,legendTop=titleBottom+12,legendRows=Math.ceil(groups.length/legendCols);
     const annotationTop=legendTop+legendRows*40+12;
     const annotationRows=pairs.map(([l,r])=>Math.max(...times.map(t=>{
