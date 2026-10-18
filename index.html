@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#176b58">
+  <title>研析 ClinStat · 基线统计 · 打开即用</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./vendor/xlsx.js" defer></script>
+  <script src="./vendor/docx.js" defer></script>
+  <script src="./browser-api.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div id="app"><div class="boot"><span class="spinner"></span><p>正在打开研究工作台…</p></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="delete-dialog"><h2>删除这个项目？</h2><p>本次页面中的数据副本、分析记录和结果将被移除。你的原 Excel 文件不受影响。</p><div class="actions"><button class="btn secondary" id="cancel-delete">保留项目</button><button class="btn danger" id="confirm-delete">删除项目</button></div></dialog>
+</body>
+</html>
