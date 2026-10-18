@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const VERSION='20261018-rm3';
+  const VERSION='20261018-box1';
   const root=document.getElementById('rm-app');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number=(v,d=2)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(d);
@@ -8,7 +8,7 @@
   const types={continuous:'连续／近似连续',binary:'二分类',ordinal:'有序分类'};
   const hypothesis={group_equal_time_average:'组间平均水平（时间等权）',time_equal_group_average:'时间变化（组别等权）',group_time_interaction:'组别 × 时间交互',any_group_difference_across_times:'各时点组间差异联合检验'};
   const colors=['#176b58','#b87837','#5e79a4','#98668e','#65934b','#ac6262','#587a84','#8d8459','#6f6998','#a17d6d'];
-  const state={step:1,book:null,dataset:null,fileName:'',settings:null,result:null,snapshot:null,error:'',busy:'',tab:'description',outcome:'',chart:'description',category:'',generation:0};
+  const state={step:1,book:null,dataset:null,fileName:'',settings:null,result:null,snapshot:null,error:'',busy:'',tab:'description',outcome:'',chart:'description',category:'',boxOptions:Object.create(null),generation:0};
   let runtime=null,runtimePromise=null,loaded=new Set(),clock=null,started=0;
   const option=(items,value)=>items.map(([v,label])=>`<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(label)}</option>`).join('');
   const field=(label,html)=>`<label class="rm-field">${label}${html}</label>`;
@@ -47,7 +47,7 @@
     const outcomes=RMCore.suggest(d.names,[group,id]);
     if(sampleGroups)for(const o of outcomes){if(o.label==='事件'){o.type='binary';o.event='有';}if(o.label==='等级'){o.type='ordinal';o.levels='低|中|高';}}
     if(!outcomes.length)outcomes.push(newOutcome(d.names.filter(x=>![group,id].includes(x))));
-    state.dataset=d;state.settings={sheet,group,id,outcomes,rowPairing:false,mappingConfirmed:false,independent:false,meanTarget:false,model:'gee',corstr:'exchangeable'};
+    state.dataset=d;state.boxOptions=Object.create(null);state.settings={sheet,group,id,outcomes,rowPairing:false,mappingConfirmed:false,independent:false,meanTarget:false,model:'gee',corstr:'exchangeable'};
     state.step=1;invalidate();render();
   }
   function newOutcome(columns){return {label:'新结局',type:'continuous',model:'gee',summary:'median_iqr',integer:false,min:'',max:'',event:'',levels:'',measurements:columns.slice(0,2).map((column,i)=>({column,time:'T'+(i+1)}))};}
@@ -97,8 +97,8 @@
     const r=state.result,o=selectedOutcome(),current=selectedResult();
     const failed=Object.entries(r.results).filter(([,v])=>v.status==='failed');
     const outside=r.means.filter(x=>x.ci_outside_declared_scale).length;
-    const tabs={description:'原始数据描述',estimates:'模型估计',comparisons:'组间比较',joint:'联合检验',diagnostics:'数据与模型诊断',methods:'方法与记录'};
-    return `<section class="rm-panel"><div class="rm-status-row"><h2 style="margin:0">${r.metadata.status==='partial'?'分析已返回，部分结果需核对':'统计结果已生成'}</h2><span class="pill">探索性分析</span></div><div class="rm-stats"><div class="rm-stat"><strong>${r.metadata.patients}</strong><span>独立患者</span></div><div class="rm-stat"><strong>${r.metadata.group_levels.length}</strong><span>研究组别</span></div><div class="rm-stat"><strong>${Object.keys(r.results).length-failed.length}/${Object.keys(r.results).length}</strong><span>已计算结局／纳入结局</span></div></div><div class="actions">${btn('下载 Word','word','')}${btn('下载 Excel','excel')}${btn('下载分析记录','json')}${btn('修改分析设置','models')}</div>${failed.map(([name,v])=>`<div class="rm-error">${esc(name)}：模型未能可靠估计。${esc(v.error)}。描述数据已保留。</div>`).join('')}${outside?`<div class="rm-warning">${outside}个连续结局均值置信区间超出指定量表范围，已保留并标记；请核对模型近似，不将区间截断为0。</div>`:''}<div class="rm-note">原始数据可用中位数描述；连续模型仍比较平均分。二分类与有序分类报告OR，不报告“平均等级差”。所有95%CI为逐项区间；校正P值不等于同时置信区间。</div><nav class="rm-tabs" aria-label="结果类型">${Object.entries(tabs).map(([key,label])=>`<button data-result-tab="${key}" class="${state.tab===key?'active':''}">${label}</button>`).join('')}</nav><div class="rm-result-controls">${field('选择结局',`<select id="rm-result-outcome">${option(state.snapshot.outcomes.map(x=>[x.label,x.label]),o.label)}</select>`)}<span class="pill">${types[o.type]} · ${o.model==='gee'?'GEE':'随机截距混合模型'}</span></div><div style="margin-top:20px">${state.tab==='description'?descriptionView(o):state.tab==='estimates'?estimateView(o):state.tab==='comparisons'?comparisonView(o):state.tab==='joint'?jointView(o):state.tab==='diagnostics'?diagnosticView(o):methodView(o)}</div>${['description','estimates'].includes(state.tab)&&current.status!=='failed'?chartView(o):''}</section>`;
+    const tabs={boxplot:'重复测量箱线图',description:'原始数据描述',estimates:'模型估计',comparisons:'组间比较',joint:'联合检验',diagnostics:'数据与模型诊断',methods:'方法与记录'};
+    return `<section class="rm-panel"><div class="rm-status-row"><h2 style="margin:0">${r.metadata.status==='partial'?'分析已返回，部分结果需核对':'统计结果已生成'}</h2><span class="pill">探索性分析</span></div><div class="rm-stats"><div class="rm-stat"><strong>${r.metadata.patients}</strong><span>独立患者</span></div><div class="rm-stat"><strong>${r.metadata.group_levels.length}</strong><span>研究组别</span></div><div class="rm-stat"><strong>${Object.keys(r.results).length-failed.length}/${Object.keys(r.results).length}</strong><span>已计算结局／纳入结局</span></div></div><div class="actions">${btn('下载 Word','word','')}${btn('下载 Excel','excel')}${btn('下载分析记录','json')}${btn('修改分析设置','models')}</div>${failed.map(([name,v])=>`<div class="rm-error">${esc(name)}：模型未能可靠估计。${esc(v.error)}。描述数据已保留。</div>`).join('')}${outside?`<div class="rm-warning">${outside}个连续结局均值置信区间超出指定量表范围，已保留并标记；请核对模型近似，不将区间截断为0。</div>`:''}<div class="rm-note">原始数据可用中位数描述；连续模型仍比较平均分。二分类与有序分类报告OR，不报告“平均等级差”。所有95%CI为逐项区间；校正P值不等于同时置信区间。</div><nav class="rm-tabs" aria-label="结果类型">${Object.entries(tabs).map(([key,label])=>`<button data-result-tab="${key}" class="${state.tab===key?'active':''}">${label}</button>`).join('')}</nav><div class="rm-result-controls">${field('选择结局',`<select id="rm-result-outcome">${option(state.snapshot.outcomes.map(x=>[x.label,x.label]),o.label)}</select>`)}<span class="pill">${types[o.type]} · ${o.model==='gee'?'GEE':'随机截距混合模型'}</span></div><div style="margin-top:20px">${state.tab==='boxplot'?boxplotView(o):state.tab==='description'?descriptionView(o):state.tab==='estimates'?estimateView(o):state.tab==='comparisons'?comparisonView(o):state.tab==='joint'?jointView(o):state.tab==='diagnostics'?diagnosticView(o):methodView(o)}</div>${['description','estimates'].includes(state.tab)&&current.status!=='failed'?chartView(o):''}</section>`;
   }
   function descriptionView(o){
     if(o.type==='continuous'){
@@ -121,6 +121,32 @@
     return `<div class="rm-diagnostic-grid"><div class="rm-note">患者对应关系：${state.snapshot.id?'编号列 '+esc(state.snapshot.id):'按原始Excel行号，一行一人已确认'}<br>纳入${diagnostic.rows}名患者，映射测量缺失${diagnostic.missing}格。<br>相同整行评分模式的额外记录${diagnostic.duplicateProfiles}条，均保留。</div><div class="rm-note">时间为分类变量，顺序：${o.measurements.map(x=>esc(x.time)).join(' → ')}。<br>不会猜测实际时间间隔，也不自动把第一个术后时点当成治疗前基线。<br>未插补、未按评分大小删患者。</div></div>${o.type==='continuous'?table(['时间','组别','最小值','最大值','0分比例','量表上界比例'],state.result.descriptive.filter(x=>x.outcome===o.label).map(x=>[esc(x.time),esc(x.group),number(x.min),number(x.max),number(x.zero_fraction*100,1)+'%',x.upper_bound_fraction==null?'未声明上界':number(x.upper_bound_fraction*100,1)+'%'])):descriptionView(o)}${residual?`<div class="rm-warning">LMM标准化残差Shapiro–Wilk P=${pvalue(residual.shapiro_p)}；这只是筛查，不据此自动更换模型。随机截距SD=${number(residual.random_intercept_sd)}，条件残差SD=${number(residual.residual_sd)}。</div>`:''}${o.type==='ordinal'?'<div class="rm-warning">比例优势假设尚需研究者核对：各等级分界点共享同一组间效应。此处不声称已自动验证，也不将数字等级当成连续距离。</div>':''}${m?.warnings?.length?`<div class="rm-warning">${(Array.isArray(m.warnings)?m.warnings:[m.warnings]).map(esc).join('<br>')}</div>`:''}`;
   }
   function methodView(o){const m=selectedResult().metadata;return `<div class="rm-method"><p>分析为探索性比较，未纳入额外协变量。研究设计、主要结局、量表方向、比较族和模型假设仍应与研究方案一致。</p>${m?`<p><strong>${esc(o.label)}</strong><br>类型：${types[o.type]}<br>模型：${esc(m.model)}；${esc(m.family)}；${esc(m.corstr)}<br>方差：${esc(m.standard_error)}<br>推断：${esc(m.inference||'渐近Wald推断')}<br>${m.interpretation?'解释层面：'+esc(m.interpretation)+'<br>':''}${m.OR_direction?'OR方向：'+esc(m.OR_direction)+'<br>':''}软件包版本：${esc(m.package_version)}</p>`:'<p>此结局模型失败，原因已保留。请核对数据、稀疏类别和模型假设。</p>'}<p>95%CI均为逐项未校正区间。组对比较分别从原始P进行结局内和全结局Holm校正，未重复校正。小样本修正、有序比例优势假设诊断、缺失数据模型及额外聚类层级不在本版自动处理范围内。</p><p>点击“下载分析记录”保存完整配置、诊断、精确P值、软件版本及失败原因。关闭或刷新页面会清空本次内存。</p></div>`;}
+  function boxOptions(o){
+    const groups=state.result.metadata.group_levels.map(String);
+    const opt=state.boxOptions[o.label]||(state.boxOptions[o.label]={showP:false,showMD:false,showTable:true,showOutliers:true,left:groups[0],right:groups[1],pField:'p_holm_within_outcome',title:o.label,yLabel:o.label});
+    if(!groups.includes(opt.left))opt.left=groups[0];
+    if(!groups.includes(opt.right)||opt.right===opt.left)opt.right=groups.find(g=>g!==opt.left);
+    return opt;
+  }
+  function boxplotView(o){
+    if(o.type!=='continuous')return '<div class="rm-note">箱线图适用于连续或近似连续结局。当前是分类结局，请使用“原始数据描述”或“模型估计”中的类别比例图；如评分需按近似连续分析，请先核对分析目标后修改指标类型。</div>';
+    const opt=boxOptions(o),groups=state.result.metadata.group_levels.map(String);
+    const toggle=(prop,label)=>`<label class="rm-check"><input type="checkbox" data-box-prop="${prop}" ${opt[prop]?'checked':''}><span>${label}</span></label>`;
+    const select=(prop,items)=>`<select data-box-prop="${prop}">${option(items,opt[prop])}</select>`;
+    const graphic=RMBoxPlot.svg({data:state.dataset.data,groupColumn:state.snapshot.group,outcome:o,groups,pairwise:state.result.pairwise,options:opt});
+    return `<div class="rm-box-settings"><h3>重复测量箱线图</h3><p class="rm-help">每个时间点并排显示各组原始观测分布。箱体为Q1–Q3、中线为中位数；可独立选择是否标注P值、是否标注模型均值差MD。</p><div class="rm-box-switches">${toggle('showP','显示 P 值')}${toggle('showMD','显示均值差（MD）')}${toggle('showTable','显示下方中位数／四分位数表')}${toggle('showOutliers','显示离群值圆点')}</div><div class="rm-grid">${field('比较组（差值左项）',select('left',groups.map(g=>[g,g])))}${field('参照组（差值右项）',select('right',groups.filter(g=>g!==opt.left).map(g=>[g,g])))}${field('P值标注方式',select('pField',Object.entries(RMBoxPlot.pLabels).map(([v,label])=>[v,label])))}${field('纵轴名称（可含单位）',`<input data-box-prop="yLabel" maxlength="100" value="${esc(opt.yLabel)}">`)}${field('图标题',`<input data-box-prop="title" maxlength="100" value="${esc(opt.title)}">`)}</div><p class="rm-help">差值方向：${esc(opt.left)} − ${esc(opt.right)}。${groups.length>2?'多组数据保留全部箱体，仅标注上面选定的一对组。':''}图中P来自当前${o.model==='lmm'?'LMM':'GEE'}模型的时点内比较，沿用完整比较族的校正；不另外进行t检验或U检验。MD是均值差，不是箱体中位数之差。</p></div><section class="rm-chart-card"><div class="actions">${btn('下载 SVG 图','svg','secondary rm-small')}${btn('下载高清 PNG','png','secondary rm-small')}</div><div class="rm-chart-scroll">${graphic}</div></section>`;
+  }
+  function chartConfig(){return state.tab==='boxplot'&&selectedOutcome().type==='continuous'?{outcome:selectedOutcome().label,...boxOptions(selectedOutcome())}:null;}
+  function chartName(extension){return 'ClinStat_repeated_'+(state.tab==='boxplot'?'boxplot':'trajectory')+'.'+extension;}
+  async function png(){
+    const svg=document.getElementById('rm-chart');if(!svg)return;
+    const url=URL.createObjectURL(new Blob([svg.outerHTML],{type:'image/svg+xml;charset=utf-8'}));
+    try{const image=new Image();await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('图片生成失败，请下载SVG图'));image.src=url;});
+      const view=svg.viewBox.baseVal,canvas=document.createElement('canvas');canvas.width=Math.ceil(view.width*3);canvas.height=Math.ceil(view.height*3);
+      const context=canvas.getContext('2d');if(!context)throw Error('浏览器无法生成PNG，请使用SVG');context.fillStyle='white';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('PNG生成失败，请使用SVG');saveBlob(blob,chartName('png'));
+    }finally{URL.revokeObjectURL(url);}
+  }
   function plotData(o,kind){
     if(kind==='estimates')return state.result.means.filter(x=>x.outcome===o.label&&(o.type!=='ordinal'||String(x.category)===state.category)).map(x=>({group:String(x.group),time:String(x.time),y:x.estimate,lo:x.ci_low,hi:x.ci_high}));
     if(o.type==='continuous')return state.result.descriptive.filter(x=>x.outcome===o.label).map(x=>({group:String(x.group),time:String(x.time),y:o.summary==='mean_sd'?x.mean:x.median,lo:o.summary==='mean_sd'?x.mean-x.sd:x.q1,hi:o.summary==='mean_sd'?x.mean+x.sd:x.q3}));
@@ -196,8 +222,9 @@
       if(action==='run'){await run();return;}
       if(action==='restart'){state.dataset=null;state.book=null;state.settings=null;state.fileName='';state.step=1;invalidate();render();return;}
       if(action==='excel'){excel();return;}if(action==='word'){await word();return;}
-      if(action==='json'){saveBlob(new Blob([JSON.stringify({result:state.result,config:state.snapshot},null,2)],{type:'application/json'}),'ClinStat_repeated_analysis.json');return;}
-      if(action==='svg'){const svg=document.getElementById('rm-chart');if(svg)saveBlob(new Blob([svg.outerHTML],{type:'image/svg+xml;charset=utf-8'}),'ClinStat_repeated_trajectory.svg');return;}
+      if(action==='json'){saveBlob(new Blob([JSON.stringify({result:state.result,config:state.snapshot,chart:chartConfig()},null,2)],{type:'application/json'}),'ClinStat_repeated_analysis.json');return;}
+      if(action==='svg'){const svg=document.getElementById('rm-chart');if(svg)saveBlob(new Blob([svg.outerHTML],{type:'image/svg+xml;charset=utf-8'}),chartName('svg'));return;}
+      if(action==='png'){await png();return;}
       const s=state.settings;if(!s)return;
       if(action==='suggest'){s.outcomes=RMCore.suggest(state.dataset.names,[s.group,s.id]);}
       if(action==='add-outcome'){
@@ -227,6 +254,7 @@
       if(el.id==='rm-file'){if(el.files[0])await load(el.files[0]);return;}
       if(el.id==='rm-result-outcome'){state.outcome=el.value;state.category='';render();return;}
       if(el.id==='rm-chart-category'){state.category=el.value;render();return;}
+      if(el.dataset.boxProp&&state.result){const opt=boxOptions(selectedOutcome());opt[el.dataset.boxProp]=el.type==='checkbox'?el.checked:el.value;render();return;}
       const s=state.settings;if(!s||busy())return;
       if(el.id==='rm-sheet'){readSheet(el.value);return;}
       if(el.id==='rm-group'){s.group=el.value;s.mappingConfirmed=false;invalidate();render();return;}
